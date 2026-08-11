@@ -89,15 +89,18 @@ namespace mlir::triton::NVIDIA {
 
 // Check if the reduction can use a redux op and return the kind.
 static std::optional<NVVM::ReductionKind>
-matchReduxKind(triton::ReduceOp op, int computeCapability,
+matchReduxKind(triton::ReduceOp op,
+               const nvidia_gpu::TargetFeatures &targetFeatures,
                bool &useNanQualifier) {
   useNanQualifier = false;
+  int computeCapability = targetFeatures.getComputeCapability();
   if (computeCapability < 80)
     return std::nullopt;
   Operation *reduceOp = op.getSingleCombiner();
   if (!reduceOp)
     return std::nullopt;
-  if (computeCapability == 100 && reduceOp->getResultTypes()[0].isF32()) {
+  if (targetFeatures.supportF32Redux() &&
+      reduceOp->getResultTypes()[0].isF32()) {
     if (isa<arith::MinimumFOp, arith::MaximumFOp>(reduceOp))
       useNanQualifier = true;
     if (isa<arith::MaxNumFOp, arith::MaximumFOp>(reduceOp))
@@ -518,8 +521,7 @@ bool TargetInfo::warpReduce(RewriterBase &rewriter, Location loc,
     return false;
   auto b = TritonLLVMOpBuilder(loc, rewriter);
   bool useNanQualifier = false;
-  if (auto kind = matchReduxKind(op, targetFeatures.getComputeCapability(),
-                                 useNanQualifier)) {
+  if (auto kind = matchReduxKind(op, targetFeatures, useNanQualifier)) {
     assert(acc.size() == 1);
     Value mask = b.i32_val(0xFFFFFFFF);
     // Even though we currently don't use redux for partitioned reduction

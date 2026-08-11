@@ -53,6 +53,12 @@ public:
     return computeCapability >= 100;
   }
 
+  bool supportF32Redux() const {
+    // FP32 redux is an sm100-family feature.  In particular it is available
+    // on Rubin (sm107), but not on the separate sm110 or sm120 families.
+    return computeCapability / 10 == 10;
+  }
+
   bool supportLdRed() const {
     // Blackwell (sm103) and newer, but exclude sm120 and sm121.
     return computeCapability >= 103 && computeCapability / 10 != 12;
