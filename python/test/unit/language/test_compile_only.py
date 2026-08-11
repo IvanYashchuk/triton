@@ -56,6 +56,63 @@ def test_compile_only_sm100() -> None:
     assert k.asm["cubin"] != b""
 
 
+def test_compile_only_enable_smem_spilling() -> None:
+
+    @triton.jit
+    def pointwise_kernel(a, b, c):
+        idx = tl.arange(0, 256)
+        tl.store(c + idx, tl.load(a + idx) + tl.load(b + idx))
+
+    src = ASTSource(
+        fn=pointwise_kernel,
+        signature={"a": "*fp32", "b": "*fp32", "c": "*fp32"},
+        constexprs={},
+    )
+    target = GPUTarget("cuda", 100, 32)
+
+    regular = triton.compile(src, target=target)
+    assert '.pragma "enable_smem_spilling";' not in regular.asm["ptx"]
+
+    enabled = triton.compile(
+        src, target=target, options={"enable_smem_spilling": True}
+    )
+    assert '.pragma "enable_smem_spilling";' in enabled.asm["ptx"]
+    assert ".reqntid" in enabled.asm["ptx"]
+    assert enabled.metadata.shared == 0
+    assert enabled.asm["cubin"] != b""
+
+    with pytest.raises(ValueError, match="requires PTX ISA 9.0"):
+        triton.compile(
+            src,
+            target=GPUTarget("cuda", 90, 32),
+            options={"enable_smem_spilling": True, "ptx_version": 88},
+        )
+
+
+def test_compile_only_enable_smem_spilling_rejects_shared_memory() -> None:
+
+    @triton.jit
+    def reduction_kernel(a, out, BLOCK: tl.constexpr):
+        values = tl.load(a + tl.arange(0, BLOCK))
+        tl.store(out, tl.sum(values, axis=0))
+
+    src = ASTSource(
+        fn=reduction_kernel,
+        signature={"a": "*fp32", "out": "*fp32", "BLOCK": "constexpr"},
+        constexprs={"BLOCK": 1024},
+    )
+    target = GPUTarget("cuda", 100, 32)
+    regular = triton.compile(src, target=target, options={"num_warps": 4})
+    assert regular.metadata.shared > 0
+
+    with pytest.raises(ValueError, match="zero dynamic shared memory"):
+        triton.compile(
+            src,
+            target=target,
+            options={"num_warps": 4, "enable_smem_spilling": True},
+        )
+
+
 @pytest.mark.parametrize("element_type", ["f32", "f16", "bf16"])
 def test_compile_only_packed_arith_chains(element_type, tmp_path) -> None:
     packed_type = f"{element_type}x2"

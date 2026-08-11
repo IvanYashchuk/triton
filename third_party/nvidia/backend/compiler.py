@@ -114,6 +114,11 @@ class CUDAOptions:
     # maxnreg corresponds to the ptx parameter .maxnreg, which controls the
     # maximum number of 32-bit registers used by one thread.
     maxnreg: Optional[int] = None
+    # Allow ptxas to spill registers to shared memory before local memory.
+    # This PTX 9.0 pragma requires explicit launch bounds (Triton emits
+    # .reqntid) and cannot be combined with dynamic shared memory or
+    # warp-specialization resource-management instructions.
+    enable_smem_spilling: bool = False
     ptx_version: int = None
     ptx_options: Optional[str] = knobs.nvidia.ptxas_options
     ir_override: Optional[str] = None  # filename of a user-defined IR (*.{ttir|ttgir|llir|ptx})
@@ -492,6 +497,18 @@ class CUDABackend(BaseBackend):
     def make_ptx(self, src, metadata, opt, capability):
         ptx_version = get_ptx_version_from_options(opt, self.target.arch)
 
+        if opt.enable_smem_spilling:
+            if ptx_version < 90 or capability < 75:
+                raise ValueError(
+                    "enable_smem_spilling requires PTX ISA 9.0+ and SM75+; "
+                    f"current target is sm_{capability} with PTX {ptx_version // 10}.{ptx_version % 10}"
+                )
+            if metadata["shared"] != 0:
+                raise ValueError(
+                    "enable_smem_spilling requires a kernel with zero dynamic shared memory; "
+                    f"current kernel uses {metadata['shared']} bytes"
+                )
+
         triple = 'nvptx64-nvidia-cuda'
 
         if capability == 107:
@@ -517,6 +534,18 @@ class CUDABackend(BaseBackend):
             # Note: if this flag is removed, the source var name and type info will be lost when ptx was compiled into cubin
             #           and we may not be able to see them in cuda-gdb
             ret = re.sub(r",\s*debug|debug,\s*", "", ret)
+        if opt.enable_smem_spilling:
+            if "setmaxnreg" in ret or "setsmemsize" in ret:
+                raise ValueError(
+                    "enable_smem_spilling cannot be combined with setmaxnreg or setsmemsize instructions"
+                )
+            entry_start = ret.index(f".visible .entry {metadata['name']}(")
+            body_start = ret.index("{", entry_start)
+            ret = (
+                ret[: body_start + 1]
+                + '\n\t.pragma "enable_smem_spilling";'
+                + ret[body_start + 1 :]
+            )
         if knobs.nvidia.dump_nvptx:
             print("// -----// NVPTX Dump //----- //")
             print(ret)
