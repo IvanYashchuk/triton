@@ -73,6 +73,24 @@ module attributes {"ttg.target" = "cuda:107", "ttg.num-ctas" = 1 : i32, "ttg.num
 
 // -----
 
+// CHECK-LABEL: partitioned_max_reduction
+//       CHECK:  %[[M:.+]] = llvm.mlir.constant(-1 : i32) : i32
+//       CHECK:   nvvm.redux.sync  fmax %{{.*}}, %{{.*}} {nan = true} : f32 -> f32
+//   CHECK-NOT:   nvvm.shfl.sync
+#partitioned_redux = #ttg.blocked<{sizePerThread = [1, 1], threadsPerWarp = [8, 4], warpsPerCTA = [4, 1], order = [1, 0]}>
+module attributes {"ttg.target" = "cuda:107", "ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, "ttg.threads-per-warp" = 32 : i32} {
+  tt.func public @partitioned_max_reduction(%arg0: tensor<1024x4xf32, #partitioned_redux>) {
+    %0 = "tt.reduce"(%arg0) <{axis = 1 : i32}> ({
+    ^bb0(%lhs: f32, %rhs: f32):
+      %max = arith.maximumf %lhs, %rhs : f32
+      tt.reduce.return %max : f32
+    }) {allocation.offset = 0 : i32} : (tensor<1024x4xf32, #partitioned_redux>) -> tensor<1024xf32, #ttg.slice<{dim = 1, parent = #partitioned_redux}>>
+    tt.return
+  }
+}
+
+// -----
+
 #shared = #ttg.nvmma_shared<{swizzlingByteWidth = 64, transposed = false, elementBitWidth = 8}>
 #shared1 = #ttg.nvmma_shared<{swizzlingByteWidth = 64, transposed = true, elementBitWidth = 8}>
 #shared2 = #ttg.swizzled_shared<{vec = 1, perPhase = 1, maxPhase = 1, order = [0]}>

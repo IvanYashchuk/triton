@@ -491,12 +491,14 @@ bool TargetInfo::warpReduce(RewriterBase &rewriter, Location loc,
   // Therefore we currently only enable it to reduce across all the lanes.
   constexpr unsigned kWarpSize = 32;
   unsigned fullMask = kWarpSize - 1;
-  if (reduceLaneIdMask != fullMask)
-    return false;
   auto b = TritonLLVMOpBuilder(loc, rewriter);
   bool useNanQualifier = false;
   if (auto kind = matchReduxKind(op, targetFeatures.getComputeCapability(),
                                  useNanQualifier)) {
+    bool isF32Family10 = targetFeatures.getComputeCapability() / 10 == 10 &&
+                         op.getResultTypes()[0].isF32();
+    if (reduceLaneIdMask != fullMask && !isF32Family10)
+      return false;
     assert(acc.size() == 1);
     Value mask = b.i32_val(0xFFFFFFFF);
     // Even though we currently don't use redux for partitioned reduction
