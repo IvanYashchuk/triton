@@ -46,7 +46,7 @@ module attributes {"ttg.target" = "cuda:107", "ttg.num-ctas" = 1 : i32, "ttg.num
     ^bb0(%lhs: f32, %rhs: f32):
       %max = arith.maximumf %lhs, %rhs : f32
       tt.reduce.return %max : f32
-    }) : (tensor<1x1024xf32, #blocked_redux>) -> tensor<1xf32, #ttg.slice<{dim = 1, parent = #blocked_redux}>>
+    }) {allocation.offset = 0 : i32} : (tensor<1x1024xf32, #blocked_redux>) -> tensor<1xf32, #ttg.slice<{dim = 1, parent = #blocked_redux}>>
     tt.return
   }
 }
@@ -66,7 +66,7 @@ module attributes {"ttg.target" = "cuda:107", "ttg.num-ctas" = 1 : i32, "ttg.num
     ^bb0(%lhs: f32, %rhs: f32):
       %max = arith.maxnumf %lhs, %rhs : f32
       tt.reduce.return %max : f32
-    }) : (tensor<1x1024xf32, #blocked_redux>) -> tensor<1xf32, #ttg.slice<{dim = 1, parent = #blocked_redux}>>
+    }) {allocation.offset = 0 : i32} : (tensor<1x1024xf32, #blocked_redux>) -> tensor<1xf32, #ttg.slice<{dim = 1, parent = #blocked_redux}>>
     tt.return
   }
 }
