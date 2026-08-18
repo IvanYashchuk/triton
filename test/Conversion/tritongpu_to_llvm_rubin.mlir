@@ -37,8 +37,11 @@ module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.targ
 //       CHECK:  %[[M:.+]] = llvm.mlir.constant(-1 : i32) : i32
 //       CHECK:   nvvm.redux.sync  fmax %{{.*}}, %[[M]] {nan = true} : f32 -> f32
 //       CHECK:   nvvm.barrier
-//       CHECK:   nvvm.shfl.sync bfly
-//       CHECK:   nvvm.shfl.sync bfly
+//       CHECK:  %[[PARTITION:.+]] = llvm.mlir.constant(-4 : i32) : i32
+//       CHECK:  %[[GROUP:.+]] = llvm.and %{{.*}}, %[[PARTITION]] : i32
+//       CHECK:  %[[MASK:.+]] = llvm.shl %{{.*}}, %[[GROUP]] : i32
+//       CHECK:   nvvm.redux.sync  fmax %{{.*}}, %[[MASK]] {nan = true} : f32 -> f32
+//   CHECK-NOT:   nvvm.shfl.sync
 #blocked_redux = #ttg.blocked<{sizePerThread = [1, 4], threadsPerWarp = [1, 32], warpsPerCTA = [1, 4], order = [1, 0]}>
 module attributes {"ttg.target" = "cuda:107", "ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, "ttg.threads-per-warp" = 32 : i32} {
   tt.func public @max_reduction(%arg0: tensor<1x1024xf32, #blocked_redux>) {
@@ -57,8 +60,11 @@ module attributes {"ttg.target" = "cuda:107", "ttg.num-ctas" = 1 : i32, "ttg.num
 //       CHECK:  %[[M:.+]] = llvm.mlir.constant(-1 : i32) : i32
 //       CHECK:   nvvm.redux.sync  fmax %{{.*}}, %[[M]] : f32 -> f32
 //       CHECK:   nvvm.barrier
-//       CHECK:   nvvm.shfl.sync bfly
-//       CHECK:   nvvm.shfl.sync bfly
+//       CHECK:  %[[PARTITION:.+]] = llvm.mlir.constant(-4 : i32) : i32
+//       CHECK:  %[[GROUP:.+]] = llvm.and %{{.*}}, %[[PARTITION]] : i32
+//       CHECK:  %[[MASK:.+]] = llvm.shl %{{.*}}, %[[GROUP]] : i32
+//       CHECK:   nvvm.redux.sync  fmax %{{.*}}, %[[MASK]] : f32 -> f32
+//   CHECK-NOT:   nvvm.shfl.sync
 #blocked_redux = #ttg.blocked<{sizePerThread = [1, 4], threadsPerWarp = [1, 32], warpsPerCTA = [1, 4], order = [1, 0]}>
 module attributes {"ttg.target" = "cuda:107", "ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, "ttg.threads-per-warp" = 32 : i32} {
   tt.func public @maxnum_reduction(%arg0: tensor<1x1024xf32, #blocked_redux>) {
@@ -74,8 +80,10 @@ module attributes {"ttg.target" = "cuda:107", "ttg.num-ctas" = 1 : i32, "ttg.num
 // -----
 
 // CHECK-LABEL: partitioned_max_reduction
-//       CHECK:  %[[M:.+]] = llvm.mlir.constant(-1 : i32) : i32
-//       CHECK:   nvvm.redux.sync  fmax %{{.*}}, %{{.*}} {nan = true} : f32 -> f32
+//       CHECK:  %[[PARTITION:.+]] = llvm.mlir.constant(-4 : i32) : i32
+//       CHECK:  %[[GROUP:.+]] = llvm.and %{{.*}}, %[[PARTITION]] : i32
+//       CHECK:  %[[MASK:.+]] = llvm.shl %{{.*}}, %[[GROUP]] : i32
+//       CHECK:   nvvm.redux.sync  fmax %{{.*}}, %[[MASK]] {nan = true} : f32 -> f32
 //   CHECK-NOT:   nvvm.shfl.sync
 #partitioned_redux = #ttg.blocked<{sizePerThread = [1, 1], threadsPerWarp = [8, 4], warpsPerCTA = [4, 1], order = [1, 0]}>
 module attributes {"ttg.target" = "cuda:107", "ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, "ttg.threads-per-warp" = 32 : i32} {

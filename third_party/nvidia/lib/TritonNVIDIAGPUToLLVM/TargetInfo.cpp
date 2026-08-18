@@ -488,7 +488,8 @@ bool TargetInfo::warpReduce(RewriterBase &rewriter, Location loc,
 
   // Based on benchmarking on A100 redux op gives a speed up only when doing
   // a single reduction (not partitioned) and when the mask is static.
-  // Therefore we currently only enable it to reduce across all the lanes.
+  // Family-10 GPUs additionally support floating-point redux, for which a
+  // dynamic partition mask avoids the shuffle sequence used for partial-warps.
   constexpr unsigned kWarpSize = 32;
   unsigned fullMask = kWarpSize - 1;
   auto b = TritonLLVMOpBuilder(loc, rewriter);
@@ -502,8 +503,6 @@ bool TargetInfo::warpReduce(RewriterBase &rewriter, Location loc,
       return false;
     assert(acc.size() == 1);
     Value mask = b.i32_val(0xFFFFFFFF);
-    // Even though we currently don't use redux for partitioned reduction
-    // the code below supports it in case we want to tweak the heuristic.
     if (reduceLaneIdMask != fullMask) {
       // For partitioned reduction we need to calculate the mask so that
       // each group of threads has the correct mask.
