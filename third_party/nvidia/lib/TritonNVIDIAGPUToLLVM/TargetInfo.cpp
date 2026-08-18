@@ -495,8 +495,9 @@ bool TargetInfo::warpReduce(RewriterBase &rewriter, Location loc,
   bool useNanQualifier = false;
   if (auto kind = matchReduxKind(op, targetFeatures.getComputeCapability(),
                                  useNanQualifier)) {
+    Operation *reduceOp = op.getSingleCombiner();
     bool isF32Family10 = targetFeatures.getComputeCapability() / 10 == 10 &&
-                         op.getResultTypes()[0].isF32();
+                         reduceOp->getResultTypes()[0].isF32();
     if (reduceLaneIdMask != fullMask && !isF32Family10)
       return false;
     assert(acc.size() == 1);
