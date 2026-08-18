@@ -2641,7 +2641,8 @@ reduce_configs1 = [(op, dtype, (1, 1024), axis, False)
 
 # shape (128, 256) and (32, 1024) are not enabled on sm86 because the required shared memory
 # exceeds the limit of 99KB
-reduce2d_shapes = [(2, 32), (4, 32), (4, 128)]
+# Include a short inner dimension to exercise partitioned warp reductions.
+reduce2d_shapes = [(2, 32), (4, 32), (4, 128), (1024, 4)]
 # TODO: fix and uncomment
 # , (32, 64), (64, 128)]
 if is_cuda() and 'V100' in torch.cuda.get_device_name(0):
